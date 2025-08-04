@@ -81,7 +81,7 @@
             
             let streamInterval = null;
             let currentStream = null;
-            const socket = io.connect('https://pothole-detector-backend.onrender.com');
+            const socket = io.connect(location.protocol + '//' + document.domain + ':' + location.port);
 
             socket.on('connect', () => {
                 console.log('Connected to server!');

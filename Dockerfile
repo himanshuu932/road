@@ -1,41 +1,46 @@
-FROM nvidia/cuda:12.1.0-runtime-ubuntu22.04
+# 1) Use a lightweight, official Python 3.10 base
+FROM python:3.10-slim
+
+# 2) Avoid interactive prompts, set working dir
 ENV DEBIAN_FRONTEND=noninteractive
 WORKDIR /app
 
-# 1. Install Python 3.10, pip, wget, sed; symlink python3→3.10
+# 3) Install apt deps and cleanup
 RUN apt-get update && \
     apt-get install -y --no-install-recommends \
-      python3.10 python3-pip wget sed && \
-    ln -sf /usr/bin/python3.10 /usr/bin/python3 && \
-    apt-get clean && rm -rf /var/lib/apt/lists/*
+      wget \
+      sed \
+      build-essential \
+      && rm -rf /var/lib/apt/lists/*
 
-# 2. Copy requirements
+# 4) Copy requirements.txt
 COPY requirements.txt .
 
-# 3. Upgrade pip & strip problematic pins
+# 5) Upgrade pip and strip out any GPU-only specs
 RUN python3 -m pip install --upgrade pip && \
-    sed -i '/^contourpy\s*==/s/==.*//' requirements.txt && \
-    sed -i '/^torch==/d; /^torchvision==/d; /^torchaudio==/d' requirements.txt && \
-    sed -i '/^[[:space:]]*scipy==/d' requirements.txt
+    sed -i '/^torch==/d; /^torchvision==/d; /^torchaudio==/d; /^contourpy\s*==/s/==.*//; /^[[:space:]]*scipy==/d' requirements.txt
 
-# 4. Install torch/cu121 wheels
+# 6) Install CPU-only PyTorch (2.5.1 CPU wheels on PyPI) + Gunicorn
 RUN python3 -m pip install --no-cache-dir \
-      torch==2.5.1+cu121 \
-      torchvision==0.20.1+cu121 \
-      torchaudio==2.5.1+cu121 \
-      --extra-index-url https://download.pytorch.org/whl/cu121/
+      torch==2.5.1 \
+      torchvision==0.20.1 \
+      torchaudio==2.5.1 \
+      gunicorn \
+      eventlet \
+      -r requirements.txt
 
-# 5. Install a compatible SciPy
-RUN python3 -m pip install --no-cache-dir scipy==1.15.3
-
-# 6. Install everything else
-RUN python3 -m pip install --no-cache-dir -r requirements.txt
-
-# 7. Copy app, download weights, expose & run
+# 7) Copy the rest of your app
 COPY . .
+
+# 8) Download your custom YOLOv8 weights
 RUN mkdir -p runs/detect/yolov8s_all_countries_custom/weights && \
     wget -O runs/detect/yolov8s_all_countries_custom/weights/best.pt \
       "https://drive.google.com/uc?export=download&id=1Knm8KsQP1o1QOub818BCYWE6J4tIPBbs"
 
+# 9) Expose and launch with Gunicorn + Eventlet
 EXPOSE 5000
-CMD ["gunicorn","--worker-class","eventlet","-w","1","--bind","0.0.0.0:5000","app:app"]
+CMD ["gunicorn", \
+     "--worker-class","eventlet", \
+     "-w","1", \
+     "--bind","0.0.0.0:5000", \
+     "app:app"]

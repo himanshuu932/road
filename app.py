@@ -18,7 +18,7 @@ socketio = SocketIO(app, async_mode='eventlet')
 
 # --- Load Your Trained YOLOv8 Model ---
 # IMPORTANT: Update this path to your best model
-MODEL_PATH = os.path.join('runs', 'detect', 'yolov8s_all_countries_custom', 'weights', 'best.pt')
+MODEL_PATH = os.path.join('runs', 'detect', 'train2', 'weights', 'best.pt')
 
 # Check for GPU
 device = 'cuda:0' if torch.cuda.is_available() else 'cpu'

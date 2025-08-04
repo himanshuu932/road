@@ -1,0 +1,11 @@
+# rdd_india.yaml
+
+# Paths are relative to your project root folder
+train: ./data/India/train/images
+val: ./data/India/val/images
+
+# Number of classes
+nc: 4
+
+# Class names (must match the order in your python script)
+names: ['D00', 'D10', 'D20', 'D40']

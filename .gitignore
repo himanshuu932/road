@@ -1,0 +1,11 @@
+# Virtual Environment
+venv/
+__pycache__/
+
+# Ultralytics runs and weights
+runs/
+yolov8s.pt
+data/
+# IDE and OS files
+.vscode/
+*.DS_Store

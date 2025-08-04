@@ -1,0 +1,12 @@
+# rdd_all.yaml
+# Dataset configuration for all combined countries
+
+# Paths are relative to your project root folder
+train: ./data/All_Countries/images/train
+val: ./data/All_Countries/images/val
+
+# Number of classes
+nc: 9
+
+# Class names (MUST match the order in your convert.py script)
+names: ['D00', 'D01', 'D10', 'D11', 'D20', 'D40', 'D43', 'D44', 'D50']

@@ -5,22 +5,24 @@ FROM python:3.10-slim
 ENV DEBIAN_FRONTEND=noninteractive
 WORKDIR /app
 
-# 3) Install apt deps and cleanup
+# 3) Install apt deps (including libGL) and cleanup
 RUN apt-get update && \
     apt-get install -y --no-install-recommends \
       wget \
       sed \
       build-essential \
-      && rm -rf /var/lib/apt/lists/*
+      libgl1 \
+      libglib2.0-0 \
+    && rm -rf /var/lib/apt/lists/*
 
 # 4) Copy requirements.txt
 COPY requirements.txt .
 
-# 5) Upgrade pip and strip out any GPU-only specs
+# 5) Upgrade pip and strip out GPU/CUDA-specific pins
 RUN python3 -m pip install --upgrade pip && \
     sed -i '/^torch==/d; /^torchvision==/d; /^torchaudio==/d; /^contourpy\s*==/s/==.*//; /^[[:space:]]*scipy==/d' requirements.txt
 
-# 6) Install CPU-only PyTorch (2.5.1 CPU wheels on PyPI) + Gunicorn
+# 6) Install CPU-only PyTorch + Gunicorn + Eventlet
 RUN python3 -m pip install --no-cache-dir \
       torch==2.5.1 \
       torchvision==0.20.1 \

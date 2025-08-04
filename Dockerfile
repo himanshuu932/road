@@ -19,10 +19,10 @@ RUN apt-get update && \
 # Copy the requirements file into the container
 COPY requirements.txt .
 
-# --- FIX for Dependency Error ---
-# Upgrade pip and remove the strict version for contourpy that causes issues on Linux.
+# --- MORE ROBUST FIX for Dependency Error ---
+# Upgrade pip and remove the strict version specifier for the problematic package.
 RUN python3 -m pip install --upgrade pip
-RUN sed -i 's/contourpy==1.3.3/contourpy/g' requirements.txt
+RUN sed -i '/^contourpy/s/==.*//' requirements.txt
 
 # Install Python dependencies
 RUN pip3 install --no-cache-dir -r requirements.txt

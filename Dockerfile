@@ -35,8 +35,8 @@ RUN python3 -m pip install --no-cache-dir \
 COPY . .
 
 # 8) Download your custom YOLOv8 weights
-RUN mkdir -p runs/detect/yolov8s_all_countries_custom/weights && \
-    wget -O runs/detect/yolov8s_all_countries_custom/weights/best.pt \
+RUN mkdir -p runs/detect/train2/weights && \
+    wget -O runs/detect/train2/weights/best.pt \
       "https://drive.google.com/uc?export=download&id=1Knm8KsQP1o1QOub818BCYWE6J4tIPBbs"
 
 # 9) Expose and launch with Gunicorn + Eventlet

@@ -1,191 +1,188 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Real-Time Road Damage Detection</title>
-    <script src="https://cdn.tailwindcss.com"></script>
-    <script src="https://cdnjs.cloudflare.com/ajax/libs/socket.io/4.0.1/socket.io.js"></script>
-    <style>
-        #container {
-            position: relative;
-            width: 100%;
-            max-width: 960px;
-            aspect-ratio: 16 / 9;
-            margin: auto;
-            background-color: #000;
-            border-radius: 0.5rem;
-        }
-        #video, #canvas {
-            position: absolute;
-            top: 0;
-            left: 0;
-            width: 100%;
-            height: 100%;
-            border-radius: 0.5rem;
-        }
-        #video.mirrored {
-            transform: scaleX(-1); /* Mirror the video for front camera */
-        }
-        #canvas {
-            background: transparent;
-        }
-        input[type=number]::-webkit-inner-spin-button, 
-        input[type=number]::-webkit-outer-spin-button { 
-          -webkit-appearance: none; 
-          margin: 0; 
-        }
-        input[type=number] {
-          -moz-appearance: textfield;
-        }
-    </style>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+  <title>Real-Time Road Damage Detection</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/socket.io/4.0.1/socket.io.js"></script>
+  <style>
+    #container {
+      position: relative;
+      width: 100%;
+      max-width: 960px;
+      aspect-ratio: 16 / 9;
+      margin: auto;
+      background-color: #111827;
+      border-radius: 0.5rem;
+    }
+    #video, #canvas {
+      position: absolute;
+      top: 0;
+      left: 0;
+      width: 100%;
+      height: 100%;
+      border-radius: 0.5rem;
+    }
+    #video.mirrored {
+      transform: scaleX(-1);
+    }
+    #canvas {
+      background: transparent;
+    }
+    input[type=number]::-webkit-inner-spin-button, 
+    input[type=number]::-webkit-outer-spin-button { 
+      -webkit-appearance: none; 
+      margin: 0; 
+    }
+    input[type=number] {
+      -moz-appearance: textfield;
+    }
+  </style>
 </head>
 <body class="bg-gray-800 text-white flex flex-col items-center justify-center min-h-screen p-4">
-    <div class="w-full max-w-4xl">
-        <h1 class="text-3xl font-bold mb-2 text-center">Real-Time Road Damage Detection</h1>
-        <p id="status" class="text-lg mb-4 text-blue-400 text-center">Ready to start.</p>
+  <div class="w-full max-w-4xl">
+    <h1 class="text-3xl font-bold mb-2 text-center">Real-Time Road Damage Detection</h1>
+    <p id="status" class="text-lg mb-4 text-blue-400 text-center">Ready to start.</p>
 
-        <div class="bg-gray-700 p-4 rounded-lg shadow-lg mb-4 flex flex-wrap items-center justify-center gap-4">
-            <!-- Source Selection Buttons -->
-            <div class="flex items-center space-x-2">
-                <button id="frontCamButton" class="bg-blue-600 hover:bg-blue-700 text-white font-bold py-2 px-4 rounded-lg">Front Camera</button>
-                <button id="rearCamButton" class="bg-blue-600 hover:bg-blue-700 text-white font-bold py-2 px-4 rounded-lg">Rear Camera</button>
-                <button id="screenShareButton" class="bg-green-600 hover:bg-green-700 text-white font-bold py-2 px-4 rounded-lg">Screen Share</button>
-                <button id="stopButton" class="bg-red-600 hover:bg-red-700 text-white font-bold py-2 px-4 rounded-lg" disabled>Stop</button>
-            </div>
-            <!-- Threshold Input -->
-            <div class="flex items-center space-x-3">
-                <label for="threshold" class="font-semibold">Confidence:</label>
-                <input type="number" id="threshold" name="threshold" min="0.0" max="1.0" value="0.4" step="0.01" 
-                       class="w-24 bg-gray-800 text-white font-mono px-2 py-1 rounded border border-gray-600 focus:outline-none focus:ring-2 focus:ring-blue-500">
-            </div>
-        </div>
-
-        <div id="container">
-            <video id="video" class="hidden" autoplay playsinline></video>
-            <canvas id="canvas"></canvas>
-        </div>
+    <div class="bg-gray-700 p-4 rounded-lg shadow-lg mb-4 flex flex-wrap items-center justify-center gap-4">
+      <div class="flex items-center space-x-2">
+        <button id="frontCamButton" class="bg-blue-600 hover:bg-blue-700 text-white font-bold py-2 px-4 rounded-lg">Front Cam</button>
+        <button id="rearCamButton" class="bg-blue-600 hover:bg-blue-700 text-white font-bold py-2 px-4 rounded-lg">Rear Cam</button>
+        <button id="screenShareButton" class="bg-green-600 hover:bg-green-700 text-white font-bold py-2 px-4 rounded-lg">Screen Share</button>
+        <button id="stopButton" class="bg-red-600 hover:bg-red-700 text-white font-bold py-2 px-4 rounded-lg" disabled>Stop</button>
+      </div>
+      <div class="flex items-center space-x-3">
+        <label for="threshold" class="font-semibold">Confidence:</label>
+        <input type="number" id="threshold" name="threshold" min="0.0" max="1.0" value="0.5" step="0.01"
+               class="w-24 bg-gray-800 text-white font-mono px-2 py-1 rounded border border-gray-600 focus:outline-none focus:ring-2 focus:ring-blue-500">
+      </div>
     </div>
 
-    <script>
-        document.addEventListener('DOMContentLoaded', () => {
-            const video = document.getElementById('video');
-            const canvas = document.getElementById('canvas');
-            const context = canvas.getContext('2d');
-            const status = document.getElementById('status');
-            const frontCamButton = document.getElementById('frontCamButton');
-            const rearCamButton = document.getElementById('rearCamButton');
-            const screenShareButton = document.getElementById('screenShareButton');
-            const stopButton = document.getElementById('stopButton');
-            const thresholdInput = document.getElementById('threshold');
-            
-            let streamInterval = null;
-            let currentStream = null;
-           // const socket = io.connect(location.protocol + '//' + document.domain + ':' + location.port);
-           const socket = io.connect("https://road-lgct.onrender.com");
+    <div id="container">
+      <video id="video" class="hidden" autoplay playsinline></video>
+      <canvas id="canvas"></canvas>
+    </div>
+  </div>
 
-            socket.on('connect', () => {
-                console.log('Connected to server!');
-                status.textContent = 'Connected. Select an input source.';
-            });
+  <script>
+    document.addEventListener('DOMContentLoaded', () => {
+      const video = document.getElementById('video');
+      const canvas = document.getElementById('canvas');
+      const context = canvas.getContext('2d');
+      const status = document.getElementById('status');
+      const frontCamButton = document.getElementById('frontCamButton');
+      const rearCamButton = document.getElementById('rearCamButton');
+      const screenShareButton = document.getElementById('screenShareButton');
+      const stopButton = document.getElementById('stopButton');
+      const thresholdInput = document.getElementById('threshold');
 
-            frontCamButton.addEventListener('click', () => startStream({ video: { facingMode: 'user' } }, true));
-            rearCamButton.addEventListener('click', () => startStream({ video: { facingMode: { exact: 'environment' } } }));
-            screenShareButton.addEventListener('click', () => startStream({ video: { cursor: 'always' }, audio: false }, false, true));
-            stopButton.addEventListener('click', stopStream);
+      let streamInterval = null;
+      let currentStream = null;
+      const socket = io.connect(location.protocol + '//' + document.domain + ':' + location.port);
 
-            async function startStream(constraints, mirror = false, isScreenShare = false) {
-                stopStream(); // Stop any existing stream first
-                
-                try {
-                    const stream = isScreenShare 
-                        ? await navigator.mediaDevices.getDisplayMedia(constraints)
-                        : await navigator.mediaDevices.getUserMedia(constraints);
-                    
-                    currentStream = stream;
-                    video.srcObject = stream;
-                    video.classList.remove('hidden');
-                    video.classList.toggle('mirrored', mirror);
+      socket.on('connect', () => {
+        status.textContent = 'Connected. Select an input source.';
+      });
 
-                    status.textContent = 'Stream active. Detecting...';
-                    toggleButtons(true);
+      frontCamButton.addEventListener('click', () => startStream({ video: { facingMode: 'user' } }, true));
+      rearCamButton.addEventListener('click', () => startStream({ video: { facingMode: { exact: 'environment' } } }));
+      screenShareButton.addEventListener('click', () => startStream({ video: { cursor: 'always' }, audio: false }, false, true));
+      stopButton.addEventListener('click', stopStream);
 
-                    streamInterval = setInterval(sendFrame, 100); // 10 FPS
+      async function startStream(constraints, mirror = false, isScreenShare = false) {
+        stopStream();
+        try {
+          const getMedia = isScreenShare
+            ? navigator.mediaDevices.getDisplayMedia.bind(navigator.mediaDevices)
+            : navigator.mediaDevices.getUserMedia.bind(navigator.mediaDevices);
+          const stream = await getMedia(constraints);
+          currentStream = stream;
+          video.srcObject = stream;
+          video.classList.remove('hidden');
+          video.classList.toggle('mirrored', mirror);
+          status.textContent = 'Stream active. Detecting...';
+          toggleButtons(true);
+          streamInterval = setInterval(sendFrame, 100);
+          stream.getVideoTracks()[0].onended = stopStream;
+        } catch (error) {
+          status.textContent = `Error: Could not start stream. ${error.name}`;
+        }
+      }
 
-                    stream.getVideoTracks()[0].onended = stopStream;
+      function stopStream() {
+        if (currentStream) currentStream.getTracks().forEach(t => t.stop());
+        if (streamInterval) clearInterval(streamInterval);
+        video.srcObject = null;
+        video.classList.add('hidden');
+        context.clearRect(0, 0, canvas.width, canvas.height);
+        status.textContent = 'Stream stopped. Select a new source.';
+        toggleButtons(false);
+      }
 
-                } catch (error) {
-                    console.error("Error starting stream: ", error);
-                    status.textContent = `Error: Could not start stream. ${error.name}`;
-                }
-            }
-
-            function stopStream() {
-                if (currentStream) {
-                    currentStream.getTracks().forEach(track => track.stop());
-                }
-                if (streamInterval) clearInterval(streamInterval);
-                
-                video.srcObject = null;
-                video.classList.add('hidden');
-                context.clearRect(0, 0, canvas.width, canvas.height);
-                status.textContent = 'Stream stopped. Select a new source.';
-                toggleButtons(false);
-                currentStream = null;
-            }
-
-            function sendFrame() {
-                if (video.readyState < 2) return;
-                
-                canvas.width = video.videoWidth;
-                canvas.height = video.videoHeight;
-                
-                const tempContext = document.createElement('canvas').getContext('2d');
-                tempContext.canvas.width = video.videoWidth;
-                tempContext.canvas.height = video.videoHeight;
-
-                if (video.classList.contains('mirrored')) {
-                    tempContext.translate(video.videoWidth, 0);
-                    tempContext.scale(-1, 1);
-                }
-                
-                tempContext.drawImage(video, 0, 0, video.videoWidth, video.videoHeight);
-                
-                const dataURL = tempContext.canvas.toDataURL('image/jpeg', 0.8);
-                const currentThreshold = thresholdInput.value;
-                socket.emit('image', { image: dataURL, threshold: currentThreshold });
-            }
-
-            socket.on('response', (data) => {
-                drawBoxes(data.detections);
-            });
-
-            function drawBoxes(detections) {
-                context.clearRect(0, 0, canvas.width, canvas.height);
-                detections.forEach(det => {
-                    const x1 = video.classList.contains('mirrored') ? canvas.width - det.x2 : det.x1;
-                    const y1 = det.y1;
-                    const width = det.x2 - det.x1;
-                    const height = det.y2 - det.y1;
-                    const label = `${det.class} ${det.confidence.toFixed(2)}`;
-                    
-                    context.strokeStyle = '#00FF00';
-                    context.lineWidth = 3;
-                    context.strokeRect(x1, y1, width, height);
-
-                    context.fillStyle = '#00FF00';
-                    context.font = '18px Arial';
-                    context.fillText(label, x1, y1 > 20 ? y1 - 5 : y1 + 20);
-                });
-            }
-
-            function toggleButtons(isStreaming) {
-                stopButton.disabled = !isStreaming;
-                frontCamButton.disabled = isStreaming;
-                rearCamButton.disabled = isStreaming;
-                screenShareButton.disabled = isStreaming;
-            }
+      function sendFrame() {
+        if (video.readyState < 2) return;
+        canvas.width = video.videoWidth;
+        canvas.height = video.videoHeight;
+        const tmp = document.createElement('canvas').getContext('2d');
+        tmp.canvas.width = video.videoWidth;
+        tmp.canvas.height = video.videoHeight;
+        if (video.classList.contains('mirrored')) {
+          tmp.translate(video.videoWidth, 0);
+          tmp.scale(-1, 1);
+        }
+        tmp.drawImage(video, 0, 0, video.videoWidth, video.videoHeight);
+        const dataURL = tmp.canvas.toDataURL('image/jpeg', 0.8);
+        socket.emit('image', {
+          image: dataURL,
+          threshold: parseFloat(thresholdInput.value)
         });
-    </script>
+      }
+
+      socket.on('response', ({ detections }) => {
+        drawBoxes(detections);
+      });
+
+      function drawBoxes(detections) {
+        context.clearRect(0, 0, canvas.width, canvas.height);
+        detections.forEach(det => {
+          const mirrored = video.classList.contains('mirrored');
+          const x1 = mirrored ? canvas.width - det.x2 : det.x1;
+          const y1 = det.y1;
+          const w  = det.x2 - det.x1;
+          const h  = det.y2 - det.y1;
+
+          // Build label: show class, optional ID, plus confidence %
+          let label = det.class;
+          if (det.id !== undefined) label += ` #${det.id}`;
+          if (det.confidence !== undefined) {
+            const pct = (det.confidence * 100).toFixed(1);
+            label += ` ${pct}%`;
+          }
+
+          context.strokeStyle = '#00FF00';
+          context.lineWidth   = 3;
+          context.strokeRect(x1, y1, w, h);
+
+          context.fillStyle = '#00FF00';
+          context.font      = '18px Arial';
+          // Draw background for readability
+          const textW = context.measureText(label).width;
+          const textH = 18;
+          context.fillRect(x1 - 1, y1 - textH, textW + 4, textH + 4);
+          // Draw text
+          context.fillStyle = '#000';
+          context.fillText(label, x1 + 2, y1 - 2);
+        });
+      }
+
+      function toggleButtons(on) {
+        stopButton.disabled = !on;
+        frontCamButton.disabled = on;
+        rearCamButton.disabled = on;
+        screenShareButton.disabled = on;
+      }
+    });
+  </script>
 </body>
 </html>

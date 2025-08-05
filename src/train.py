@@ -32,7 +32,7 @@ def main():
     num_epochs = 100
     # Batch size is lowered because yolov8s uses more GPU memory.
     # If you get an 'out of memory' error, try reducing this to 4.
-    batch_size = 8
+    batch_size = 20
     
     image_size = 640
 

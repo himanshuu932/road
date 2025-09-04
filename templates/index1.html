@@ -45,6 +45,7 @@
     <h1 class="text-3xl font-bold mb-2 text-center">Real-Time Road Damage Detection</h1>
     <p id="status" class="text-lg mb-4 text-blue-400 text-center">Ready to start.</p>
 
+    <!-- Controls -->
     <div class="bg-gray-700 p-4 rounded-lg shadow-lg mb-4 flex flex-wrap items-center justify-center gap-4">
       <div class="flex items-center space-x-2">
         <button id="frontCamButton" class="bg-blue-600 hover:bg-blue-700 text-white font-bold py-2 px-4 rounded-lg">Front Cam</button>
@@ -63,13 +64,11 @@
       </div>
     </div>
 
+    <!-- Video / Canvas Container -->
     <div id="container">
       <video id="video" class="hidden" autoplay playsinline></video>
       <canvas id="canvas"></canvas>
     </div>
-
-    <div id="results-gallery" class="mt-8 w-full max-w-4xl grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-4">
-      </div>
   </div>
 
   <script>
@@ -202,37 +201,17 @@
 
       // --- Upload Image/Video ---
       uploadButton.addEventListener('click', async () => {
-        const gallery = document.getElementById('results-gallery');
-        gallery.innerHTML = ''; // Clear previous results
-
         if (!fileUpload.files.length) {
           alert("Please select a file!");
           return;
         }
 
         const file = fileUpload.files[0];
-        const threshold = parseFloat(thresholdInput.value);
-
-        // Client-side video duration check (up to 20 seconds)
-        if (file.type.startsWith('video/')) {
-          try {
-            const duration = await getVideoDuration(file);
-            if (duration > 20) {
-              status.textContent = 'Error: Video must be 20 seconds or shorter.';
-              alert('Error: Video must be 20 seconds or shorter.');
-              return;
-            }
-          } catch (e) {
-            status.textContent = 'Error: Could not read video file.';
-            return;
-          }
-        }
-
         const formData = new FormData();
         formData.append('file', file);
-        formData.append('threshold', threshold);
+        formData.append('threshold', parseFloat(thresholdInput.value));
 
-        status.textContent = 'Uploading and processing... Please wait.';
+        status.textContent = 'Uploading and processing...';
 
         const res = await fetch('/upload', {
           method: 'POST',
@@ -240,68 +219,21 @@
         });
 
         if (res.ok) {
-          // Check content type to handle both image and new video JSON response
-          const contentType = res.headers.get("content-type");
-          if (contentType && contentType.indexOf("application/json") !== -1) {
-            // Handle new video JSON response
-            const results = await res.json();
-            if (results.length > 0) {
-              status.textContent = `Processing complete. Found potholes in ${results.length} frames.`;
-              results.forEach(result => {
-                const resultEl = document.createElement('div');
-                resultEl.className = 'bg-gray-700 rounded-lg p-2 text-center';
-
-                const img = new Image();
-                img.src = 'data:image/jpeg;base64,' + result.image;
-                img.className = 'rounded mb-2';
-
-                const timestampEl = document.createElement('p');
-                timestampEl.className = 'text-sm font-mono';
-                timestampEl.textContent = `Time: ${result.timestamp}`;
-
-                const countEl = document.createElement('p');
-                countEl.className = 'text-sm font-semibold';
-                countEl.textContent = `Potholes: ${result.pothole_count}`;
-
-                resultEl.appendChild(img);
-                resultEl.appendChild(timestampEl);
-                resultEl.appendChild(countEl);
-                gallery.appendChild(resultEl);
-              });
-            } else {
-              status.textContent = 'Processing complete. No potholes were detected in the video.';
-            }
-          } else {
-            // Handle original single image response
-            const blob = await res.blob();
-            const img = new Image();
-            img.onload = () => {
-              canvas.width = img.width;
-              canvas.height = img.height;
-              context.clearRect(0, 0, canvas.width, canvas.height);
-              context.drawImage(img, 0, 0);
-              status.textContent = 'Processed image displayed.';
-            };
-            img.src = URL.createObjectURL(blob);
-          }
+          const blob = await res.blob();
+          const img = new Image();
+          img.onload = () => {
+            canvas.width = img.width;
+            canvas.height = img.height;
+            context.clearRect(0, 0, canvas.width, canvas.height);
+            context.drawImage(img, 0, 0);
+            status.textContent = 'Processed file displayed.';
+          };
+          img.src = URL.createObjectURL(blob);
         } else {
           const text = await res.text();
           status.textContent = `Error: ${text}`;
         }
       });
-
-      function getVideoDuration(file) {
-        return new Promise((resolve, reject) => {
-          const videoElement = document.createElement('video');
-          videoElement.preload = 'metadata';
-          videoElement.onloadedmetadata = () => {
-            window.URL.revokeObjectURL(videoElement.src);
-            resolve(videoElement.duration);
-          };
-          videoElement.onerror = reject;
-          videoElement.src = URL.createObjectURL(file);
-        });
-      }
     });
   </script>
 </body>

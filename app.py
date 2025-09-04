@@ -2,7 +2,7 @@ import os
 import cv2
 import base64
 import numpy as np
-from flask import Flask, render_template, request, send_file
+from flask import Flask, render_template, request, send_file, jsonify
 from flask_socketio import SocketIO, emit
 from ultralytics import YOLO
 import torch
@@ -34,6 +34,7 @@ except Exception as e:
 def index():
     return render_template('index.html')
 
+
 @app.route('/upload', methods=['POST'])
 def upload_file():
     if model is None:
@@ -41,6 +42,9 @@ def upload_file():
 
     file = request.files.get('file')
     threshold = float(request.form.get('threshold', 0.5))
+    target_fps = int(request.form.get('target_fps', 10))  # default 10 FPS
+    print(f"[INFO] Received file: {file.filename} with threshold: {threshold}, target_fps: {target_fps}")
+
     if not file:
         return "No file uploaded", 400
 
@@ -51,34 +55,62 @@ def upload_file():
         file_bytes = np.frombuffer(file.read(), np.uint8)
         frame = cv2.imdecode(file_bytes, cv2.IMREAD_COLOR)
         processed_frame = process_frame(frame, threshold)
-
-       
         _, buffer = cv2.imencode('.jpg', processed_frame)
         return buffer.tobytes(), 200, {'Content-Type': 'image/jpeg'}
 
     # --- Process video ---
     elif filename.endswith(('.mp4', '.avi', '.mov', '.mkv')):
-        # Save temporarily to disk for OpenCV
         temp_file_path = os.path.join(tempfile.gettempdir(), filename)
         file.save(temp_file_path)
 
         cap = cv2.VideoCapture(temp_file_path)
-        frames = []
+        fps = cap.get(cv2.CAP_PROP_FPS)
+        frame_count = int(cap.get(cv2.CAP_PROP_FRAME_COUNT))
+        duration = frame_count / fps if fps > 0 else 0
+
+        print(f"[INFO] Video FPS: {fps}, Total frames: {frame_count}, Duration: {duration:.2f}s")
+
+        # Determine how many frames to skip to reach target_fps
+        frame_interval =  1
+
+        results_data = []
+        frame_id = 0
+
         while True:
             ret, frame = cap.read()
             if not ret:
                 break
-            frame = process_frame(frame, threshold)
-            frames.append(frame)
-        cap.release()
 
-        # For simplicity, return first frame
-        _, buffer = cv2.imencode('.jpg', frames[0])
-        return buffer.tobytes(), 200, {'Content-Type': 'image/jpeg'}
+            # Process only every Nth frame
+            if frame_id % frame_interval == 0:
+                detections = get_detections(frame, threshold)
+
+                if detections:
+                    pothole_count = len(detections)
+                    processed_frame = process_frame(frame, threshold)
+
+                    timestamp_ms = cap.get(cv2.CAP_PROP_POS_MSEC)
+                    seconds = int(timestamp_ms // 1000)
+                    milliseconds = int(timestamp_ms % 1000)
+
+                    _, buffer = cv2.imencode('.jpg', processed_frame)
+                    b64_frame = base64.b64encode(buffer).decode('utf-8')
+
+                    results_data.append({
+                        'timestamp': f'{seconds:02d}.{milliseconds:03d}s',
+                        'pothole_count': pothole_count,
+                        'image': b64_frame
+                    })
+
+            frame_id += 1
+
+        cap.release()
+        os.remove(temp_file_path)
+
+        return jsonify(results_data)
 
     else:
         return "Unsupported file type", 400
-
 # --- SocketIO Event for Live Stream ---
 @socketio.on('image')
 def handle_image(data):

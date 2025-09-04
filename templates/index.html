@@ -45,6 +45,7 @@
     <h1 class="text-3xl font-bold mb-2 text-center">Real-Time Road Damage Detection</h1>
     <p id="status" class="text-lg mb-4 text-blue-400 text-center">Ready to start.</p>
 
+    <!-- Controls -->
     <div class="bg-gray-700 p-4 rounded-lg shadow-lg mb-4 flex flex-wrap items-center justify-center gap-4">
       <div class="flex items-center space-x-2">
         <button id="frontCamButton" class="bg-blue-600 hover:bg-blue-700 text-white font-bold py-2 px-4 rounded-lg">Front Cam</button>
@@ -57,8 +58,13 @@
         <input type="number" id="threshold" name="threshold" min="0.0" max="1.0" value="0.5" step="0.01"
                class="w-24 bg-gray-800 text-white font-mono px-2 py-1 rounded border border-gray-600 focus:outline-none focus:ring-2 focus:ring-blue-500">
       </div>
+      <div class="flex items-center space-x-2">
+        <input type="file" id="fileUpload" accept="image/*,video/*" class="bg-gray-800 text-white px-2 py-1 rounded">
+        <button id="uploadButton" class="bg-purple-600 hover:bg-purple-700 text-white font-bold py-2 px-4 rounded-lg">Upload</button>
+      </div>
     </div>
 
+    <!-- Video / Canvas Container -->
     <div id="container">
       <video id="video" class="hidden" autoplay playsinline></video>
       <canvas id="canvas"></canvas>
@@ -76,6 +82,8 @@
       const screenShareButton = document.getElementById('screenShareButton');
       const stopButton = document.getElementById('stopButton');
       const thresholdInput = document.getElementById('threshold');
+      const fileUpload = document.getElementById('fileUpload');
+      const uploadButton = document.getElementById('uploadButton');
 
       let streamInterval = null;
       let currentStream = null;
@@ -85,6 +93,7 @@
         status.textContent = 'Connected. Select an input source.';
       });
 
+      // Live Stream Buttons
       frontCamButton.addEventListener('click', () => startStream({ video: { facingMode: 'user' } }, true));
       rearCamButton.addEventListener('click', () => startStream({ video: { facingMode: { exact: 'environment' } } }));
       screenShareButton.addEventListener('click', () => startStream({ video: { cursor: 'always' }, audio: false }, false, true));
@@ -139,10 +148,21 @@
         });
       }
 
-      socket.on('response', ({ detections }) => {
-        drawBoxes(detections);
+      socket.on('response', ({ detections, image }) => {
+        if (image) {
+          const img = new Image();
+          img.onload = () => {
+            canvas.width = img.width;
+            canvas.height = img.height;
+            context.drawImage(img, 0, 0);
+          };
+          img.src = image;
+        } else {
+          drawBoxes(detections);
+        }
       });
 
+      // Draw bounding boxes
       function drawBoxes(detections) {
         context.clearRect(0, 0, canvas.width, canvas.height);
         detections.forEach(det => {
@@ -152,9 +172,7 @@
           const w  = det.x2 - det.x1;
           const h  = det.y2 - det.y1;
 
-          // Build label: show class, optional ID, plus confidence %
           let label = det.class;
-          if (det.id !== undefined) label += ` #${det.id}`;
           if (det.confidence !== undefined) {
             const pct = (det.confidence * 100).toFixed(1);
             label += ` ${pct}%`;
@@ -166,11 +184,9 @@
 
           context.fillStyle = '#00FF00';
           context.font      = '18px Arial';
-          // Draw background for readability
           const textW = context.measureText(label).width;
           const textH = 18;
           context.fillRect(x1 - 1, y1 - textH, textW + 4, textH + 4);
-          // Draw text
           context.fillStyle = '#000';
           context.fillText(label, x1 + 2, y1 - 2);
         });
@@ -182,6 +198,42 @@
         rearCamButton.disabled = on;
         screenShareButton.disabled = on;
       }
+
+      // --- Upload Image/Video ---
+      uploadButton.addEventListener('click', async () => {
+        if (!fileUpload.files.length) {
+          alert("Please select a file!");
+          return;
+        }
+
+        const file = fileUpload.files[0];
+        const formData = new FormData();
+        formData.append('file', file);
+        formData.append('threshold', parseFloat(thresholdInput.value));
+
+        status.textContent = 'Uploading and processing...';
+
+        const res = await fetch('/upload', {
+          method: 'POST',
+          body: formData
+        });
+
+        if (res.ok) {
+          const blob = await res.blob();
+          const img = new Image();
+          img.onload = () => {
+            canvas.width = img.width;
+            canvas.height = img.height;
+            context.clearRect(0, 0, canvas.width, canvas.height);
+            context.drawImage(img, 0, 0);
+            status.textContent = 'Processed file displayed.';
+          };
+          img.src = URL.createObjectURL(blob);
+        } else {
+          const text = await res.text();
+          status.textContent = `Error: ${text}`;
+        }
+      });
     });
   </script>
 </body>

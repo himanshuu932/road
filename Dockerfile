@@ -12,5 +12,6 @@ COPY . .
 # Expose port for Cloud Run
 EXPOSE 5000
 
-# Run the Flask app
-CMD ["python", "app.py"]
+
+# Run the app with Gunicorn
+CMD ["gunicorn", "-k", "eventlet", "-w", "1", "--bind", "0.0.0.0:5000", "app:app"]
